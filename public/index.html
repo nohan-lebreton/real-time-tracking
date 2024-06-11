@@ -66,7 +66,7 @@
                 const username = document.getElementById('username').value.trim();
                 if (username !== '') {
                     if (!isConnected) {
-                        userId = generateId(); // Generate a unique ID
+                        userId = generateId();
                         connect(username);
                     } else {
                         disconnect();
@@ -191,13 +191,13 @@
             if (peerConnection) {
                 peerConnection.close();
             }
-            
+
             peerConnection = createPeerConnection(id);
 
-            // Ajouter les pistes de flux local à la connexion peer-to-peer
+            // Add local stream tracks to peer connection
             localStream.getTracks().forEach(track => peerConnection.addTrack(track, localStream));
 
-            // Créer une offre et l'envoyer à l'utilisateur sélectionné
+            // Create offer and send to selected user
             const offer = await peerConnection.createOffer();
             await peerConnection.setLocalDescription(offer);
 
