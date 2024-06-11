@@ -29,6 +29,12 @@
             <input type="text" class="form-control mr-2" id="username" name="username">
             <button class="btn btn-primary" id="connectButton">Connect</button>
         </div>
+        <div id="accelerometerData">
+            <h3>Accelerometer Data</h3>
+            <p>X: <span id="accelX">0</span></p>
+            <p>Y: <span id="accelY">0</span></p>
+            <p>Z: <span id="accelZ">0</span></p>
+        </div>
         <div id="map" class="mb-4"></div>
         <div id="userList">
             <h2 class="my-4">Connected Users</h2>
@@ -43,12 +49,6 @@
                 <h3>Selected User's Camera</h3>
                 <video id="remoteVideo" class="border" autoplay></video>
             </div>
-        </div>
-        <div id="accelerometerData" class="mt-4">
-            <h3>Accelerometer Data</h3>
-            <p>X: <span id="accelX">0</span></p>
-            <p>Y: <span id="accelY">0</span></p>
-            <p>Z: <span id="accelZ">0</span></p>
         </div>
     </div>
     <script src="https://unpkg.com/leaflet@1.7.1/dist/leaflet.js"></script>
