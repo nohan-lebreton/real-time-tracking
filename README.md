@@ -1,5 +1,8 @@
 # Real-Time Tracking Application
 
+## Repository GitHub
+
+- [Repo-Git-Real-Time-Tracking](https://github.com/nohan-lebreton/real-time-tracking)
 ## Description
 
 L'application Real-Time Tracking est une application web permettant le suivi en temps réel de la position des utilisateurs, l'affichage des données de l'accéléromètre et la communication vidéo entre utilisateurs. Elle utilise WebSockets pour une communication en temps réel, Leaflet pour la carte, et WebRTC pour les flux vidéo.
@@ -15,7 +18,7 @@ L'application Real-Time Tracking est une application web permettant le suivi en 
 
 - HTML, CSS, JavaScript pour le frontend.
 - Node.js, Express et WebSocket pour le backend.
-- Leaflet pour l'affichage de la carte.
+- Leaflet pour l'affichage de la carte.(car j'ai eu des probleme pour avoir accès a une clef api gogole maps)
 - WebRTC pour la communication vidéo.
 - Bootstrap pour le style.
 
