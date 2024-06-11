@@ -106,6 +106,7 @@
             if (!isConnected) return; // Check if still connected
 
             const users = JSON.parse(event.data);
+            console.log('Received users:', users); // Log for debugging
             const connectedUsers = users.filter(user => !user.disconnect); // Filter connected users
 
             // Update the map markers
