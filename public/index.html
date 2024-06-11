@@ -97,24 +97,19 @@
             if (!isConnected) return; // Check if still connected
 
             const users = JSON.parse(event.data);
-            users.forEach(user => {
-                if (user.disconnect) {
-                    if (markers[user.id]) {
-                        map.removeLayer(markers[user.id]);
-                        delete markers[user.id];
-                    }
+            const connectedUsers = users.filter(user => !user.disconnect); // Filter connected users
+
+            connectedUsers.forEach(user => {
+                if (!markers[user.id]) {
+                    markers[user.id] = L.marker([user.position.latitude, user.position.longitude]).addTo(map).bindPopup(`${user.username}'s Position`);
                 } else {
-                    if (!markers[user.id]) {
-                        markers[user.id] = L.marker([user.position.latitude, user.position.longitude]).addTo(map).bindPopup(`${user.username}'s Position`);
-                    } else {
-                        markers[user.id].setLatLng([user.position.latitude, user.position.longitude]);
-                    }
+                    markers[user.id].setLatLng([user.position.latitude, user.position.longitude]);
                 }
             });
 
-            // Remove markers that are not in the user list anymore
+            // Remove markers of disconnected users
             Object.keys(markers).forEach(id => {
-                if (!users.find(user => user.id === id)) {
+                if (!connectedUsers.find(user => user.id === id)) {
                     map.removeLayer(markers[id]);
                     delete markers[id];
                 }
