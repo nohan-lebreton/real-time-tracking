@@ -5,13 +5,11 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Real-Time Tracking</title>
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.7.1/dist/leaflet.css" />
+    <link rel="stylesheet" href="https://stackpath.bootstrapcdn.com/bootstrap/4.5.2/css/bootstrap.min.css">
     <style>
         #map {
             height: 500px;
             width: 100%;
-        }
-        #userList {
-            margin-top: 20px;
         }
         #videos {
             display: flex;
@@ -19,33 +17,38 @@
             margin-top: 20px;
         }
         video {
-            width: 45%;
+            width: 100%;
         }
     </style>
 </head>
 <body>
-    <h1>Real-Time Tracking Application</h1>
-    <div>
-        <label for="username">Username:</label>
-        <input type="text" id="username" name="username">
-        <button id="connectButton">Connect</button>
-    </div>
-    <div id="map"></div>
-    <div id="userList">
-        <h2>Connected Users</h2>
-        <ul id="users"></ul>
-    </div>
-    <div id="videos">
-        <div>
-            <h3>Your Camera</h3>
-            <video id="localVideo" autoplay muted></video>
+    <div class="container">
+        <h1 class="my-4 text-center">Real-Time Tracking Application</h1>
+        <div class="form-inline my-4 justify-content-center">
+            <label for="username" class="mr-2">Username:</label>
+            <input type="text" class="form-control mr-2" id="username" name="username">
+            <button class="btn btn-primary" id="connectButton">Connect</button>
         </div>
-        <div>
-            <h3>Selected User's Camera</h3>
-            <video id="remoteVideo" autoplay></video>
+        <div id="map" class="mb-4"></div>
+        <div id="userList">
+            <h2 class="my-4">Connected Users</h2>
+            <ul id="users" class="list-group"></ul>
+        </div>
+        <div id="videos" class="row">
+            <div class="col-md-6">
+                <h3>Your Camera</h3>
+                <video id="localVideo" class="border" autoplay muted></video>
+            </div>
+            <div class="col-md-6">
+                <h3>Selected User's Camera</h3>
+                <video id="remoteVideo" class="border" autoplay></video>
+            </div>
         </div>
     </div>
     <script src="https://unpkg.com/leaflet@1.7.1/dist/leaflet.js"></script>
+    <script src="https://code.jquery.com/jquery-3.5.1.slim.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@popperjs/core@2.5.4/dist/umd/popper.min.js"></script>
+    <script src="https://stackpath.bootstrapcdn.com/bootstrap/4.5.2/js/bootstrap.min.js"></script>
     <script src="js/main.js"></script>
 </body>
 </html>
