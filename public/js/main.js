@@ -3,9 +3,6 @@ const markers = {};
 const socket = new WebSocket('wss://nohan.lebreton.caen.mds-project.fr');
 const localVideo = document.getElementById('localVideo');
 const remoteVideo = document.getElementById('remoteVideo');
-const accelX = document.getElementById('accelX');
-const accelY = document.getElementById('accelY');
-const accelZ = document.getElementById('accelZ');
 let localStream;
 let peerConnection;
 
@@ -68,9 +65,6 @@ async function connect(username) {
     } else {
         alert("Geolocation is not supported by this browser.");
     }
-
-    // Start Accelerometer
-    startAccelerometer();
 }
 
 function disconnect() {
@@ -230,30 +224,3 @@ function generateId() {
 }
 
 window.onload = initMap;
-
-// Function to start the accelerometer
-function startAccelerometer() {
-    if ('Accelerometer' in window) {
-        const accelerometer = new Accelerometer({ frequency: 60 });
-        accelerometer.addEventListener('reading', () => {
-            accelX.textContent = accelerometer.x.toFixed(2);
-            accelY.textContent = accelerometer.y.toFixed(2);
-            accelZ.textContent = accelerometer.z.toFixed(2);
-
-            if (isConnected) {
-                socket.send(JSON.stringify({
-                    type: 'accelerometer',
-                    id: userId,
-                    data: {
-                        x: accelerometer.x,
-                        y: accelerometer.y,
-                        z: accelerometer.z
-                    }
-                }));
-            }
-        });
-        accelerometer.start();
-    } else {
-        console.error('Accelerometer not supported');
-    }
-}
