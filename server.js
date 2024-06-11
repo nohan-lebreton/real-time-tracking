@@ -14,7 +14,7 @@ let users = [];
 
 wss.on('connection', ws => {
     console.log('Client connected');
-    let userId;
+    let userId = uuidv4();
     let userData;
 
     ws.on('message', message => {
@@ -24,12 +24,7 @@ wss.on('connection', ws => {
                 users = users.filter(user => user.id !== data.id);
                 broadcastUsers();
             } else if (data.type === 'user') {
-                if (!userData) {
-                    userId = data.id;
-                    userData = { ...data, connectedAt: new Date().toLocaleTimeString() }; // Add connectedAt time
-                } else {
-                    userData = { ...userData, position: data.position };
-                }
+                userData = { ...data, id: userId, connectedAt: new Date().toLocaleTimeString() };
                 users = users.filter(user => user.id !== userId);
                 users.push(userData);
                 broadcastUsers();
