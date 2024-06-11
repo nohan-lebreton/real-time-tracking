@@ -29,6 +29,8 @@ wss.on('connection', ws => {
                 broadcastUsers();
             } else if (data.type === 'signal') {
                 broadcastSignal(data);
+            } else if (data.type === 'accelerometer') {
+                handleAccelerometerData(data);
             }
         } catch (error) {
             console.error('Error processing message:', error);
@@ -60,6 +62,14 @@ function broadcastSignal(signal) {
     wss.clients.forEach(client => {
         if (client.readyState === WebSocket.OPEN) {
             client.send(JSON.stringify(signal));
+        }
+    });
+}
+
+function handleAccelerometerData(data) {
+    wss.clients.forEach(client => {
+        if (client.readyState === WebSocket.OPEN) {
+            client.send(JSON.stringify({ type: 'accelerometer', data }));
         }
     });
 }
