@@ -248,31 +248,31 @@
             };
             const peerConnection = new RTCPeerConnection(config);
 
-            peerConnection.onicecandidate = event => {
-                if (event.candidate) {
-                    console.log(`Sending candidate to ${id}`);
-                    socket.send(JSON.stringify({
-                        type: 'signal',
-                        id: userId,
-                        target: id,
-                        candidate: event.candidate
-                    }));
-                }
-            };
+peerConnection.onicecandidate = event => {
+    if (event.candidate) {
+        socket.send(JSON.stringify({
+            type: 'signal',
+            id: userId,
+            target: id,
+            candidate: event.candidate
+        }));
+        console.log(`Sending candidate to ${id}`);
+    }
+};
 
-            peerConnection.ontrack = event => {
-                console.log(`Received remote track from ${id}`);
-                remoteVideo.srcObject = event.streams[0];
-            };
+peerConnection.ontrack = event => {
+    console.log('Received remote stream');
+    remoteVideo.srcObject = event.streams[0];
+};
 
-            return peerConnection;
-        }
+return peerConnection;
+}
 
-        window.onload = initMap;
+function generateId() {
+return '_' + Math.random().toString(36).substr(2, 9);
+}
 
-        function generateId() {
-            return '_' + Math.random().toString(36).substr(2, 9);
-        }
-    </script>
+window.onload = initMap;
+</script>
 </body>
 </html>
