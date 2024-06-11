@@ -6,20 +6,7 @@
     <title>Real-Time Tracking</title>
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.7.1/dist/leaflet.css" />
     <link rel="stylesheet" href="https://stackpath.bootstrapcdn.com/bootstrap/4.5.2/css/bootstrap.min.css">
-    <style>
-        #map {
-            height: 500px;
-            width: 100%;
-        }
-        #videos {
-            display: flex;
-            justify-content: space-between;
-            margin-top: 20px;
-        }
-        video {
-            width: 100%;
-        }
-    </style>
+    <link rel="stylesheet" href="css/style.css">
 </head>
 <body>
     <div class="container">
@@ -43,6 +30,12 @@
                 <h3>Selected User's Camera</h3>
                 <video id="remoteVideo" class="border" autoplay></video>
             </div>
+        </div>
+        <div id="accelerometerData" class="mt-4">
+            <h3>Accelerometer Data</h3>
+            <p>X: <span id="accelX">0</span></p>
+            <p>Y: <span id="accelY">0</span></p>
+            <p>Z: <span id="accelZ">0</span></p>
         </div>
     </div>
     <script src="https://unpkg.com/leaflet@1.7.1/dist/leaflet.js"></script>
