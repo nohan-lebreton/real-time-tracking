@@ -1,6 +1,8 @@
 <!DOCTYPE html>
-<html>
+<html lang="en">
 <head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Real-Time Tracking</title>
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.7.1/dist/leaflet.css" />
     <style>
@@ -52,7 +54,6 @@
         const remoteVideo = document.getElementById('remoteVideo');
         let localStream;
         let peerConnection;
-        const peerConnections = {};
 
         function initMap() {
             map = L.map('map').setView([51.505, -0.09], 13);
@@ -187,81 +188,82 @@
             if (peerConnection) {
                 peerConnection.close();
             }
+            
             peerConnection = createPeerConnection(id);
 
-            // Add local stream tracks to the peer connection
+            // Ajouter les pistes de flux local à la connexion peer-to-peer
             localStream.getTracks().forEach(track => peerConnection.addTrack(track, localStream));
 
+            // Créer une offre et l'envoyer à l'utilisateur sélectionné
             const offer = await peerConnection.createOffer();
             await peerConnection.setLocalDescription(offer);
 
             socket.send(JSON.stringify({
-                    type: 'signal',
-                    id: userId,
-                    target: id,
-                    offer: peerConnection.localDescription
-                }));
-            }
+                type: 'signal',
+                id: userId,
+                target: id,
+                offer: peerConnection.localDescription
+            }));
+        }
 
-            function handleSignal(message) {
-                const { id, target, offer, answer, candidate } = message;
+        function handleSignal(message) {
+            const { id, target, offer, answer, candidate } = message;
 
-                if (target === userId) {
-                    if (offer) {
-                        peerConnection = createPeerConnection(id);
+            if (target === userId) {
+                if (offer) {
+                    peerConnection = createPeerConnection(id);
 
-                        peerConnection.setRemoteDescription(new RTCSessionDescription(offer))
-                            .then(() => peerConnection.createAnswer())
-                            .then(answer => peerConnection.setLocalDescription(answer))
-                            .then(() => {
-                                socket.send(JSON.stringify({
-                                    type: 'signal',
-                                    id: userId,
-                                    target: id,
-                                    answer: peerConnection.localDescription
-                                }));
-                            });
-                    } else if (answer) {
-                        peerConnection.setRemoteDescription(new RTCSessionDescription(answer));
-                    } else if (candidate) {
-                        peerConnection.addIceCandidate(new RTCIceCandidate(candidate));
-                    }
+                    peerConnection.setRemoteDescription(new RTCSessionDescription(offer))
+                        .then(() => peerConnection.createAnswer())
+                        .then(answer => peerConnection.setLocalDescription(answer))
+                        .then(() => {
+                            socket.send(JSON.stringify({
+                                type: 'signal',
+                                id: userId,
+                                target: id,
+                                answer: peerConnection.localDescription
+                            }));
+                        });
+                } else if (answer) {
+                    peerConnection.setRemoteDescription(new RTCSessionDescription(answer));
+                } else if (candidate) {
+                    peerConnection.addIceCandidate(new RTCIceCandidate(candidate));
                 }
             }
+        }
 
-            function createPeerConnection(id) {
-                const config = {
-                    iceServers: [
-                        { urls: 'stun:stun.l.google.com:19302' }
-                    ]
-                };
-                const peerConnection = new RTCPeerConnection(config);
+        function createPeerConnection(id) {
+            const config = {
+                iceServers: [
+                    { urls: 'stun:stun.l.google.com:19302' }
+                ]
+            };
+            const peerConnection = new RTCPeerConnection(config);
 
-                peerConnection.onicecandidate = event => {
-                    if (event.candidate) {
-                        socket.send(JSON.stringify({
-                            type: 'signal',
-                            id: userId,
-                            target: id,
-                            candidate: event.candidate
-                        }));
-                    }
-                };
+            peerConnection.onicecandidate = event => {
+                if (event.candidate) {
+                    socket.send(JSON.stringify({
+                        type: 'signal',
+                        id: userId,
+                        target: id,
+                        candidate: event.candidate
+                    }));
+                }
+            };
 
-                peerConnection.ontrack = event => {
-                    remoteVideo.srcObject = event.streams[0];
-                };
+            peerConnection.ontrack = event => {
+                remoteVideo.srcObject = event.streams[0];
+            };
 
-                return peerConnection;
-            }
+            return peerConnection;
+        }
 
-            window.onload = initMap;
+        window.onload = initMap;
 
-            function generateId() {
-                return '_' + Math.random().toString(36).substr(2, 9);
-            }
-        </script>
+        function generateId() {
+            return '_' + Math.random().toString(36).substr(2, 9);
+        }
+    </script>
 </body>
 </html>
 
-               
