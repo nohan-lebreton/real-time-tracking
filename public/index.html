@@ -12,10 +12,15 @@
 </head>
 <body>
     <h1>Real-Time Tracking Application</h1>
+    <div>
+        <label for="username">Username:</label>
+        <input type="text" id="username" name="username">
+        <button id="connectButton">Connect</button>
+    </div>
     <div id="map"></div>
     <script src="https://unpkg.com/leaflet@1.7.1/dist/leaflet.js"></script>
     <script>
-        let map, userMarker;
+        let map, userMarker, userId, isConnected = false;
         const markers = {};
         const socket = new WebSocket('ws://localhost:3000');
 
@@ -26,39 +31,101 @@
                 attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
             }).addTo(map);
 
+            document.getElementById('connectButton').addEventListener('click', () => {
+                const username = document.getElementById('username').value.trim();
+                if (username !== '') {
+                    if (!isConnected) {
+                        connect(username);
+                    } else {
+                        disconnect();
+                    }
+                } else {
+                    alert('Please enter a username.');
+                }
+            });
+
+            document.getElementById('username').addEventListener('keydown', event => {
+                if (event.key === 'Enter') {
+                    document.getElementById('connectButton').click();
+                }
+            });
+        }
+
+        function connect(username) {
+            isConnected = true;
+            userId = generateId();
+            document.getElementById('connectButton').innerText = 'Disconnect';
+
             if (navigator.geolocation) {
                 navigator.geolocation.watchPosition(position => {
+                    if (!isConnected) return; // Check if still connected
                     const { latitude, longitude } = position.coords;
                     const pos = [latitude, longitude];
 
                     if (!userMarker) {
-                        userMarker = L.marker(pos).addTo(map).bindPopup('Your Position').openPopup();
+                        userMarker = L.marker(pos).addTo(map).bindPopup(`Your Position (${username})`).openPopup();
                     } else {
                         userMarker.setLatLng(pos);
                     }
 
                     map.setView(pos);
-                    socket.send(JSON.stringify({ latitude, longitude }));
+                    socket.send(JSON.stringify({ id: userId, username, position: { latitude, longitude } }));
                 });
             } else {
                 alert("Geolocation is not supported by this browser.");
             }
         }
 
+        function disconnect() {
+            isConnected = false;
+            document.getElementById('connectButton').innerText = 'Connect';
+            if (userMarker) {
+                map.removeLayer(userMarker);
+                userMarker = null;
+            }
+            socket.send(JSON.stringify({ id: userId, disconnect: true }));
+            // Remove user markers from the map
+            Object.keys(markers).forEach(id => {
+                if (markers[id]) {
+                    map.removeLayer(markers[id]);
+                    delete markers[id];
+                }
+            });
+        }
+
         socket.onmessage = event => {
+            if (!isConnected) return; // Check if still connected
+
             const users = JSON.parse(event.data);
             users.forEach(user => {
-                const pos = [user.position.latitude, user.position.longitude];
-
-                if (!markers[user.id]) {
-                    markers[user.id] = L.marker(pos).addTo(map).bindPopup(`User ${user.id}`);
+                if (user.disconnect) {
+                    if (markers[user.id]) {
+                        map.removeLayer(markers[user.id]);
+                        delete markers[user.id];
+                    }
                 } else {
-                    markers[user.id].setLatLng(pos);
+                    if (!markers[user.id]) {
+                        markers[user.id] = L.marker([user.position.latitude, user.position.longitude]).addTo(map).bindPopup(`${user.username}'s Position`);
+                    } else {
+                        markers[user.id].setLatLng([user.position.latitude, user.position.longitude]);
+                    }
+                }
+            });
+
+            // Remove markers that are not in the user list anymore
+            Object.keys(markers).forEach(id => {
+                if (!users.find(user => user.id === id)) {
+                    map.removeLayer(markers[id]);
+                    delete markers[id];
                 }
             });
         };
 
         window.onload = initMap;
+
+        function generateId() {
+            return '_' + Math.random().toString(36).substr(2, 9);
+        }
     </script>
 </body>
 </html>
