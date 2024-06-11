@@ -1,6 +1,7 @@
 const express = require('express');
 const http = require('http');
 const WebSocket = require('ws');
+
 const { v4: uuidv4 } = require('uuid');
 
 const app = express();
@@ -13,7 +14,7 @@ let users = [];
 
 wss.on('connection', ws => {
     console.log('Client connected');
-    let userId = uuidv4();
+    let userId;
     let userData;
 
     ws.on('message', message => {
@@ -23,7 +24,12 @@ wss.on('connection', ws => {
                 users = users.filter(user => user.id !== data.id);
                 broadcastUsers();
             } else {
-                userData = { ...data, id: userId };
+                if (!userData) {
+                    userId = data.id;
+                    userData = { ...data, connectedAt: new Date().toLocaleTimeString() }; // Add connectedAt time
+                } else {
+                    userData = { ...userData, position: data.position };
+                }
                 users = users.filter(user => user.id !== userId);
                 users.push(userData);
                 broadcastUsers();
