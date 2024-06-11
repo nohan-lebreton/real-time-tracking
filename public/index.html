@@ -47,7 +47,7 @@
     <script>
         let map, userMarker, userId, isConnected = false;
         const markers = {};
-        const socket = new WebSocket('ws://localhost:3000');
+        const socket = new WebSocket('wss://nohan.lebreton.caen.mds-project.fr:3000');
         const localVideo = document.getElementById('localVideo');
         const remoteVideo = document.getElementById('remoteVideo');
         let localStream;
