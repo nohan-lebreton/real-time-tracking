@@ -174,9 +174,12 @@
                 connectedUsers.forEach(user => {
                     const listItem = document.createElement('li');
                     listItem.textContent = `${user.username} connected at ${user.connectedAt}`;
-                    listItem.addEventListener('click', () => {
+                    const viewButton = document.createElement('button');
+                    viewButton.textContent = 'View Camera';
+                    viewButton.addEventListener('click', () => {
                         selectUser(user.id);
                     });
+                    listItem.appendChild(viewButton);
                     userList.appendChild(listItem);
                 });
             } else if (message.type === 'signal') {
@@ -266,4 +269,3 @@
     </script>
 </body>
 </html>
-
