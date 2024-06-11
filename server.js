@@ -23,7 +23,7 @@ wss.on('connection', ws => {
             if (data.disconnect) {
                 users = users.filter(user => user.id !== data.id);
                 broadcastUsers();
-            } else {
+            } else if (data.type === 'user') {
                 if (!userData) {
                     userId = data.id;
                     userData = { ...data, connectedAt: new Date().toLocaleTimeString() }; // Add connectedAt time
@@ -33,6 +33,8 @@ wss.on('connection', ws => {
                 users = users.filter(user => user.id !== userId);
                 users.push(userData);
                 broadcastUsers();
+            } else if (data.type === 'signal') {
+                broadcastSignal(data);
             }
         } catch (error) {
             console.error('Error processing message:', error);
@@ -55,7 +57,15 @@ wss.on('connection', ws => {
 function broadcastUsers() {
     wss.clients.forEach(client => {
         if (client.readyState === WebSocket.OPEN) {
-            client.send(JSON.stringify(users));
+            client.send(JSON.stringify({ type: 'users', data: users }));
+        }
+    });
+}
+
+function broadcastSignal(signal) {
+    wss.clients.forEach(client => {
+        if (client.readyState === WebSocket.OPEN) {
+            client.send(JSON.stringify(signal));
         }
     });
 }

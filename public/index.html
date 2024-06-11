@@ -3,7 +3,6 @@
 <head>
     <title>Real-Time Tracking</title>
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.7.1/dist/leaflet.css" />
-    <link rel="icon" href="favicon.ico" />
     <style>
         #map {
             height: 500px;
@@ -11,6 +10,14 @@
         }
         #userList {
             margin-top: 20px;
+        }
+        #videos {
+            display: flex;
+            justify-content: space-between;
+            margin-top: 20px;
+        }
+        video {
+            width: 45%;
         }
     </style>
 </head>
@@ -26,12 +33,26 @@
         <h2>Connected Users</h2>
         <ul id="users"></ul>
     </div>
+    <div id="videos">
+        <div>
+            <h3>Your Camera</h3>
+            <video id="localVideo" autoplay muted></video>
+        </div>
+        <div>
+            <h3>Selected User's Camera</h3>
+            <video id="remoteVideo" autoplay></video>
+        </div>
+    </div>
     <script src="https://unpkg.com/leaflet@1.7.1/dist/leaflet.js"></script>
     <script>
         let map, userMarker, userId, isConnected = false;
         const markers = {};
-        //const socket = new WebSocket('ws://localhost:3000');
-        const socket = new WebSocket('wss://nohan.lebreton.caen.mds-project.fr');
+        const socket = new WebSocket('ws://localhost:3000');
+        const localVideo = document.getElementById('localVideo');
+        const remoteVideo = document.getElementById('remoteVideo');
+        let localStream;
+        let peerConnection;
+        const peerConnections = {};
 
         function initMap() {
             map = L.map('map').setView([51.505, -0.09], 13);
@@ -61,9 +82,18 @@
             });
         }
 
-        function connect(username) {
+        async function connect(username) {
             isConnected = true;
             document.getElementById('connectButton').innerText = 'Disconnect';
+
+            try {
+                localStream = await navigator.mediaDevices.getUserMedia({ video: true });
+                localVideo.srcObject = localStream;
+            } catch (error) {
+                console.error('Error accessing media devices.', error);
+                alert('Error accessing media devices.');
+                return;
+            }
 
             if (navigator.geolocation) {
                 navigator.geolocation.watchPosition(position => {
@@ -78,7 +108,7 @@
                     }
 
                     map.setView(pos);
-                    socket.send(JSON.stringify({ id: userId, username, position: { latitude, longitude } }));
+                    socket.send(JSON.stringify({ type: 'user', id: userId, username, position: { latitude, longitude } }));
                 });
             } else {
                 alert("Geolocation is not supported by this browser.");
@@ -92,7 +122,7 @@
                 map.removeLayer(userMarker);
                 userMarker = null;
             }
-            socket.send(JSON.stringify({ id: userId, disconnect: true }));
+            socket.send(JSON.stringify({ type: 'user', id: userId, disconnect: true }));
             // Remove user markers from the map
             Object.keys(markers).forEach(id => {
                 if (markers[id]) {
@@ -102,47 +132,135 @@
             });
             // Clear the user list
             document.getElementById('users').innerHTML = '';
+            localVideo.srcObject = null;
+            if (localStream) {
+                localStream.getTracks().forEach(track => track.stop());
+            }
+            if (peerConnection) {
+                peerConnection.close();
+                peerConnection = null;
+            }
         }
 
         socket.onmessage = event => {
             if (!isConnected) return; // Check if still connected
 
-            const users = JSON.parse(event.data);
-            console.log('Received users:', users); // Log for debugging
-            const connectedUsers = users.filter(user => !user.disconnect); // Filter connected users
+            const message = JSON.parse(event.data);
+            if (message.type === 'users') {
+                const users = message.data;
+                const connectedUsers = users.filter(user => !user.disconnect); // Filter connected users
 
-            // Update the map markers
-            connectedUsers.forEach(user => {
-                if (!markers[user.id]) {
-                    markers[user.id] = L.marker([user.position.latitude, user.position.longitude]).addTo(map).bindPopup(`${user.username}'s Position`);
-                } else {
-                    markers[user.id].setLatLng([user.position.latitude, user.position.longitude]);
-                }
-            });
+                // Update the map markers
+                connectedUsers.forEach(user => {
+                    if (!markers[user.id]) {
+                        markers[user.id] = L.marker([user.position.latitude, user.position.longitude]).addTo(map).bindPopup(`${user.username}'s Position`);
+                    } else {
+                        markers[user.id].setLatLng([user.position.latitude, user.position.longitude]);
+                    }
+                });
 
-            // Remove markers of disconnected users
-            Object.keys(markers).forEach(id => {
-                if (!connectedUsers.find(user => user.id === id)) {
-                    map.removeLayer(markers[id]);
-                    delete markers[id];
-                }
-            });
+                // Remove markers of disconnected users
+                Object.keys(markers).forEach(id => {
+                    if (!connectedUsers.find(user => user.id === id)) {
+                        map.removeLayer(markers[id]);
+                        delete markers[id];
+                    }
+                });
 
-            // Update the user list
-            const userList = document.getElementById('users');
-            userList.innerHTML = '';
-            connectedUsers.forEach(user => {
-                const listItem = document.createElement('li');
-                listItem.textContent = `${user.username} connected at ${user.connectedAt}`;
-                userList.appendChild(listItem);
-            });
+                // Update the user list
+                const userList = document.getElementById('users');
+                userList.innerHTML = '';
+                connectedUsers.forEach(user => {
+                    const listItem = document.createElement('li');
+                    listItem.textContent = `${user.username} connected at ${user.connectedAt}`;
+                    listItem.addEventListener('click', () => {
+                        selectUser(user.id);
+                    });
+                    userList.appendChild(listItem);
+                });
+            } else if (message.type === 'signal') {
+                handleSignal(message);
+            }
         };
 
-        window.onload = initMap;
+        async function selectUser(id) {
+            if (peerConnection) {
+                peerConnection.close();
+            }
+            peerConnection = createPeerConnection(id);
 
-        function generateId() {
-            return '_' + Math.random().toString(36).substr(2, 9);
-        }
-    </script>
+            // Add local stream tracks to the peer connection
+            localStream.getTracks().forEach(track => peerConnection.addTrack(track, localStream));
+
+            const offer = await peerConnection.createOffer();
+            await peerConnection.setLocalDescription(offer);
+
+            socket.send(JSON.stringify({
+                    type: 'signal',
+                    id: userId,
+                    target: id,
+                    offer: peerConnection.localDescription
+                }));
+            }
+
+            function handleSignal(message) {
+                const { id, target, offer, answer, candidate } = message;
+
+                if (target === userId) {
+                    if (offer) {
+                        peerConnection = createPeerConnection(id);
+
+                        peerConnection.setRemoteDescription(new RTCSessionDescription(offer))
+                            .then(() => peerConnection.createAnswer())
+                            .then(answer => peerConnection.setLocalDescription(answer))
+                            .then(() => {
+                                socket.send(JSON.stringify({
+                                    type: 'signal',
+                                    id: userId,
+                                    target: id,
+                                    answer: peerConnection.localDescription
+                                }));
+                            });
+                    } else if (answer) {
+                        peerConnection.setRemoteDescription(new RTCSessionDescription(answer));
+                    } else if (candidate) {
+                        peerConnection.addIceCandidate(new RTCIceCandidate(candidate));
+                    }
+                }
+            }
+
+            function createPeerConnection(id) {
+                const config = {
+                    iceServers: [
+                        { urls: 'stun:stun.l.google.com:19302' }
+                    ]
+                };
+                const peerConnection = new RTCPeerConnection(config);
+
+                peerConnection.onicecandidate = event => {
+                    if (event.candidate) {
+                        socket.send(JSON.stringify({
+                            type: 'signal',
+                            id: userId,
+                            target: id,
+                            candidate: event.candidate
+                        }));
+                    }
+                };
+
+                peerConnection.ontrack = event => {
+                    remoteVideo.srcObject = event.streams[0];
+                };
+
+                return peerConnection;
+            }
+
+            window.onload = initMap;
+
+            function generateId() {
+                return '_' + Math.random().toString(36).substr(2, 9);
+            }
+        </script>
 </body>
 </html>
+
