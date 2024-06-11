@@ -30,7 +30,8 @@
     <script>
         let map, userMarker, userId, isConnected = false;
         const markers = {};
-        const socket = new WebSocket('ws://localhost:3000');
+        //const socket = new WebSocket('ws://localhost:3000');
+        const socket = new WebSocket('wss://nohan.lebreton.caen.mds-project.fr');
 
         function initMap() {
             map = L.map('map').setView([51.505, -0.09], 13);
