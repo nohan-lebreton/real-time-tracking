@@ -21,7 +21,13 @@ function initMap() {
         if (username !== '') {
             if (!isConnected) {
                 userId = generateId();
-                connect(username);
+                requestMotionPermission().then(granted => {
+                    if (granted) {
+                        connect(username);
+                    } else {
+                        alert('Motion access permission denied.');
+                    }
+                });
             } else {
                 disconnect();
             }
@@ -36,7 +42,17 @@ function initMap() {
         }
     });
 
-    document.getElementById('startAccelButton').addEventListener('click', requestMotionPermission);
+    // Event listener for motion permission button
+    document.getElementById('motionPermissionButton').addEventListener('click', async () => {
+        if (typeof DeviceMotionEvent.requestPermission === 'function') {
+            const permissionState = await requestMotionPermission();
+            if (!permissionState) {
+                alert('Permission to access motion data denied.');
+            }
+        } else {
+            startAccelerometer(); // For browsers that don't require permission
+        }
+    });
 }
 
 async function connect(username) {
@@ -233,21 +249,6 @@ function generateId() {
 
 window.onload = initMap;
 
-// Function to request motion permission
-function requestMotionPermission() {
-    if (typeof DeviceMotionEvent !== 'undefined' && typeof DeviceMotionEvent.requestPermission === 'function') {
-        DeviceMotionEvent.requestPermission().then(permissionState => {
-            if (permissionState === 'granted') {
-                startAccelerometer();
-            } else {
-                alert('Permission to access motion sensors denied.');
-            }
-        }).catch(console.error);
-    } else {
-        startAccelerometer();
-    }
-}
-
 // Function to start the accelerometer
 function startAccelerometer() {
     if ('Accelerometer' in window) {
@@ -274,3 +275,24 @@ function startAccelerometer() {
         console.error('Accelerometer not supported');
     }
 }
+
+// Function to request motion permission
+async function requestMotionPermission() {
+    if (typeof DeviceMotionEvent.requestPermission === 'function') {
+        try {
+            const permissionState = await DeviceMotionEvent.requestPermission();
+            if (permissionState === 'granted') {
+                return true;
+            } else {
+                return false;
+            }
+        } catch (error) {
+            console.error(error);
+            return false;
+        }
+    } else {
+        startAccelerometer(); // For browsers that don't require permission
+        return true;
+    }
+}
+
