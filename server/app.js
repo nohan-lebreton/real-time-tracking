@@ -1,295 +1,115 @@
-let map, userMarker, userId, isConnected = false;
-const markers = {};
-const socket = new WebSocket('wss://nohan.lebreton.caen.mds-project.fr');
-const localVideo = document.getElementById('localVideo');
-const remoteVideo = document.getElementById('remoteVideo');
-const accelX = document.getElementById('accelX');
-const accelY = document.getElementById('accelY');
-const accelZ = document.getElementById('accelZ');
-let localStream;
-let peerConnection;
+/* This code snippet is setting up a server using Node.js with Express for handling HTTP requests,
+WebSocket for real-time communication, and UUID for generating unique identifiers. Here's a
+breakdown of what each part does: */
+const express = require('express');
+const http = require('http');
+const WebSocket = require('ws');
+const { v4: uuidv4 } = require('uuid');
 
-function initMap() {
-    map = L.map('map').setView([51.505, -0.09], 13);
+const app = express();
+const server = http.createServer(app);
+const wss = new WebSocket.Server({ server });
 
-    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-        attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
-    }).addTo(map);
+/* `app.use(express.static('public'));` is setting up a middleware in the Express application to serve
+static files from the 'public' directory. This means that any files (like HTML, CSS, images, etc.)
+placed in the 'public' directory can be accessed by clients making HTTP requests to the server. This
+middleware allows you to serve static content without having to write specific routes for each file,
+making it a convenient way to serve assets like stylesheets, scripts, and images. */
+app.use(express.static('public'));
 
-    document.getElementById('connectButton').addEventListener('click', () => {
-        const username = document.getElementById('username').value.trim();
-        if (username !== '') {
-            if (!isConnected) {
-                userId = generateId();
-                requestMotionPermission().then(granted => {
-                    if (granted) {
-                        connect(username);
-                    } else {
-                        alert('Motion access permission denied.');
-                    }
-                });
-            } else {
-                disconnect();
-            }
-        } else {
-            alert('Please enter a username.');
-        }
-    });
+/* `let users = [];` is initializing an empty array named `users`. This array is used to store
+information about users who connect to the server via WebSocket. Each user's data is stored as an
+object in this array, and various operations are performed on this array based on the messages
+received from clients. */
+let users = [];
+/* The code block you provided is an event listener attached to the WebSocket Server (`wss`) for
+handling client connections. Here's a breakdown of what it does: */
 
-    document.getElementById('username').addEventListener('keydown', event => {
-        if (event.key === 'Enter') {
-            document.getElementById('connectButton').click();
-        }
-    });
-}
+wss.on('connection', ws => {
+    console.log('Client connected');
+    let userId = uuidv4();
+    let userData;
 
-async function connect(username) {
-    isConnected = true;
-    document.getElementById('connectButton').innerText = 'Disconnect';
-
-    try {
-        localStream = await navigator.mediaDevices.getUserMedia({ video: true });
-        localVideo.srcObject = localStream;
-    } catch (error) {
-        console.error('Error accessing media devices.', error);
-        alert('Error accessing media devices.');
-        return;
-    }
-
-    if (navigator.geolocation) {
-        navigator.geolocation.watchPosition(position => {
-            if (!isConnected) return; // Check if still connected
-            const { latitude, longitude } = position.coords;
-            const pos = [latitude, longitude];
-
-            if (!userMarker) {
-                userMarker = L.marker(pos).addTo(map).bindPopup(`Your Position (${username})`).openPopup();
-            } else {
-                userMarker.setLatLng(pos);
-            }
-
-            map.setView(pos);
-            socket.send(JSON.stringify({ type: 'user', id: userId, username, position: { latitude, longitude } }));
-        });
-    } else {
-        alert("Geolocation is not supported by this browser.");
-    }
-
-    // Start Accelerometer
-    startAccelerometer();
-}
-
-function disconnect() {
-    isConnected = false;
-    document.getElementById('connectButton').innerText = 'Connect';
-    if (userMarker) {
-        map.removeLayer(userMarker);
-        userMarker = null;
-    }
-    socket.send(JSON.stringify({ type: 'user', id: userId, disconnect: true }));
-    // Remove user markers from the map
-    Object.keys(markers).forEach(id => {
-        if (markers[id]) {
-            map.removeLayer(markers[id]);
-            delete markers[id];
-        }
-    });
-    // Clear the user list
-    document.getElementById('users').innerHTML = '';
-    localVideo.srcObject = null;
-    if (localStream) {
-        localStream.getTracks().forEach(track => track.stop());
-    }
-    if (peerConnection) {
-        peerConnection.close();
-        peerConnection = null;
-    }
-}
-
-socket.onmessage = event => {
-    if (!isConnected) return; // Check if still connected
-
-    const message = JSON.parse(event.data);
-    if (message.type === 'users') {
-        const users = message.data;
-        const connectedUsers = users.filter(user => !user.disconnect); // Filter connected users
-
-        // Update the map markers
-        connectedUsers.forEach(user => {
-            if (!markers[user.id]) {
-                markers[user.id] = L.marker([user.position.latitude, user.position.longitude]).addTo(map).bindPopup(`${user.username}'s Position`);
-            } else {
-                markers[user.id].setLatLng([user.position.latitude, user.position.longitude]);
-            }
-        });
-
-        // Remove markers of disconnected users
-        Object.keys(markers).forEach(id => {
-            if (!connectedUsers.find(user => user.id === id)) {
-                map.removeLayer(markers[id]);
-                delete markers[id];
-            }
-        });
-
-        // Update the user list
-        const userList = document.getElementById('users');
-        userList.innerHTML = '';
-        connectedUsers.forEach(user => {
-            const listItem = document.createElement('li');
-            listItem.textContent = `${user.username} connected at ${user.connectedAt}`;
-            const viewButton = document.createElement('button');
-            viewButton.textContent = 'View Camera';
-            viewButton.addEventListener('click', () => {
-                selectUser(user.id);
-            });
-            listItem.appendChild(viewButton);
-            userList.appendChild(listItem);
-        });
-    } else if (message.type === 'signal') {
-        handleSignal(message);
-    }
-};
-
-async function selectUser(id) {
-    console.log(`Selecting user ${id}`);
-    if (peerConnection) {
-        peerConnection.close();
-    }
-
-    peerConnection = createPeerConnection(id);
-
-    // Add local stream tracks to peer connection
-    localStream.getTracks().forEach(track => peerConnection.addTrack(track, localStream));
-
-    // Create offer and send to selected user
-    const offer = await peerConnection.createOffer();
-    await peerConnection.setLocalDescription(offer);
-
-    socket.send(JSON.stringify({
-        type: 'signal',
-        id: userId,
-        target: id,
-        offer: peerConnection.localDescription
-    }));
-}
-
-function handleSignal(message) {
-    const { id, target, offer, answer, candidate } = message;
-
-    if (target === userId) {
-        if (offer) {
-            console.log(`Received offer from ${id}`);
-            peerConnection = createPeerConnection(id);
-
-            peerConnection.setRemoteDescription(new RTCSessionDescription(offer))
-                .then(() => peerConnection.createAnswer())
-                .then(answer => peerConnection.setLocalDescription(answer))
-                .then(() => {
-                    socket.send(JSON.stringify({
-                        type: 'signal',
-                        id: userId,
-                        target: id,
-                        answer: peerConnection.localDescription
-                    }));
-                });
-        } else if (answer) {
-            console.log(`Received answer from ${id}`);
-            peerConnection.setRemoteDescription(new RTCSessionDescription(answer));
-        } else if (candidate) {
-            console.log(`Received candidate from ${id}`);
-            peerConnection.addIceCandidate(new RTCIceCandidate(candidate));
-        }
-    }
-}
-
-function createPeerConnection(id) {
-    console.log(`Creating peer connection with ${id}`);
-    const config = {
-        iceServers: [
-            { urls: 'stun:stun.l.google.com:19302' }
-        ]
-    };
-    const peerConnection = new RTCPeerConnection(config);
-
-    peerConnection.onicecandidate = event => {
-        if (event.candidate) {
-            socket.send(JSON.stringify({
-                type: 'signal',
-                id: userId,
-                target: id,
-                candidate: event.candidate
-            }));
-            console.log(`Sending candidate to ${id}`);
-        }
-    };
-
-    peerConnection.ontrack = event => {
-        console.log('Received remote stream');
-        if (event.streams && event.streams.length > 0) {
-            console.log('Remote stream:', event.streams[0]); // Vérifiez si le flux vidéo distant est reçu
-            remoteVideo.srcObject = event.streams[0];
-        }
-    };
-
-    return peerConnection;
-}
-
-function generateId() {
-    return '_' + Math.random().toString(36).substr(2, 9);
-}
-
-window.onload = initMap;
-
-// Function to start the accelerometer
-function startAccelerometer() {
-    if ('Accelerometer' in window) {
-        const accelerometer = new Accelerometer({ frequency: 60 });
-        accelerometer.addEventListener('reading', () => {
-            accelX.textContent = accelerometer.x.toFixed(2);
-            accelY.textContent = accelerometer.y.toFixed(2);
-            accelZ.textContent = accelerometer.z.toFixed(2);
-
-            if (isConnected) {
-                socket.send(JSON.stringify({
-                    type: 'accelerometer',
-                    id: userId,
-                    data: {
-                        x: accelerometer.x,
-                        y: accelerometer.y,
-                        z: accelerometer.z
-                    }
-                }));
-            }
-        });
-        accelerometer.start();
-    } else {
-        console.error('Accelerometer not supported');
-    }
-}
-
-// Function to request motion permission
-async function requestMotionPermission() {
-    if (typeof DeviceMotionEvent.requestPermission === 'function') {
+    ws.on('message', message => {
         try {
-            const permissionState = await DeviceMotionEvent.requestPermission();
-            if (permissionState === 'granted') {
-                return true;
-            } else {
-                return false;
+            const data = JSON.parse(message);
+            if (data.disconnect) {
+                users = users.filter(user => user.id !== data.id);
+                broadcastUsers();
+            } else if (data.type === 'user') {
+                userData = { ...data, id: userId, connectedAt: new Date().toLocaleTimeString() };
+                users = users.filter(user => user.id !== userId);
+                users.push(userData);
+                broadcastUsers();
+            } else if (data.type === 'signal') {
+                broadcastSignal(data);
+            } else if (data.type === 'accelerometer') {
+                handleAccelerometerData(data);
             }
         } catch (error) {
-            console.error(error);
-            return false;
+            console.error('Error processing message:', error);
         }
-    } else {
-        startAccelerometer(); // For browsers that don't require permission
-        return true;
-    }
+    });
+
+    ws.on('close', () => {
+        console.log('Client disconnected');
+        if (userData) {
+            users = users.filter(user => user.id !== userId);
+            broadcastUsers();
+        }
+    });
+
+    ws.on('error', error => {
+        console.error('WebSocket error:', error);
+    });
+});
+/**
+ * The function `broadcastUsers` sends a JSON string containing information about users to all
+ * connected WebSocket clients.
+ */
+
+function broadcastUsers() {
+    wss.clients.forEach(client => {
+        if (client.readyState === WebSocket.OPEN) {
+            client.send(JSON.stringify({ type: 'users', data: users }));
+        }
+    });
 }
 
-peerConnection.ontrack = event => {
-    console.log('Received remote stream');
-    if (event.streams && event.streams.length > 0) {
-        remoteVideo.srcObject = event.streams[0];
-    }
-};
+/**
+ * The function `broadcastSignal` sends a JSON stringified signal to all WebSocket clients that are in
+ * an open state.
+ * @param signal - The `broadcastSignal` function takes a `signal` parameter, which is the data that
+ * you want to broadcast to all connected WebSocket clients. This function iterates over all clients
+ * connected to the WebSocket server (`wss`) and sends the `signal` data to each client that has an
+ * open connection.
+ */
+function broadcastSignal(signal) {
+    wss.clients.forEach(client => {
+        if (client.readyState === WebSocket.OPEN) {
+            client.send(JSON.stringify(signal));
+        }
+    });
+}
+
+/**
+ * The function `handleAccelerometerData` sends accelerometer data to all connected WebSocket clients.
+ * @param data - The `data` parameter in the `handleAccelerometerData` function likely represents the
+ * accelerometer data that is being received or processed. This data could include information such as
+ * acceleration values in different axes (x, y, z), timestamp, or any other relevant data from the
+ * accelerometer sensor.
+ */
+function handleAccelerometerData(data) {
+    wss.clients.forEach(client => {
+        if (client.readyState === WebSocket.OPEN) {
+            client.send(JSON.stringify({ type: 'accelerometer', data }));
+        }
+    });
+}
+
+/* The code block you provided is setting up a server to listen on a specific port for incoming HTTP
+requests. */
+const PORT = 3000;
+server.listen(PORT, () => {
+    console.log(`Server is running on port ${PORT}`);
+});
