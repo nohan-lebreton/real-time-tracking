@@ -46,6 +46,10 @@ function initMap() {
     document.getElementById('motionPermissionButton').addEventListener('click', async () => {
         if (typeof DeviceMotionEvent.requestPermission === 'function') {
             const permissionState = await requestMotionPermission();
+            if (permissionState === 'granted') {
+                startAccelerometer();
+            }
+        } else {
             startAccelerometer(); // For browsers that don't require permission
         }
     });
@@ -269,6 +273,27 @@ function startAccelerometer() {
         accelerometer.start();
     } else {
         console.error('Accelerometer not supported');
+        if (window.DeviceMotionEvent) {
+            window.addEventListener('devicemotion', (event) => {
+                accelX.textContent = event.acceleration.x.toFixed(2);
+                accelY.textContent = event.acceleration.y.toFixed(2);
+                accelZ.textContent = event.acceleration.z.toFixed(2);
+
+                if (isConnected) {
+                    socket.send(JSON.stringify({
+                        type: 'accelerometer',
+                        id: userId,
+                        data: {
+                            x: event.acceleration.x,
+                            y: event.acceleration.y,
+                            z: event.acceleration.z
+                        }
+                    }));
+                }
+            });
+        } else {
+            console.error('DeviceMotionEvent not supported');
+        }
     }
 }
 
@@ -291,4 +316,3 @@ async function requestMotionPermission() {
         return true;
     }
 }
-
