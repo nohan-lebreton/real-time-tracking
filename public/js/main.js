@@ -35,6 +35,8 @@ function initMap() {
             document.getElementById('connectButton').click();
         }
     });
+
+    document.getElementById('startAccelButton').addEventListener('click', requestMotionPermission);
 }
 
 async function connect(username) {
@@ -230,6 +232,21 @@ function generateId() {
 }
 
 window.onload = initMap;
+
+// Function to request motion permission
+function requestMotionPermission() {
+    if (typeof DeviceMotionEvent !== 'undefined' && typeof DeviceMotionEvent.requestPermission === 'function') {
+        DeviceMotionEvent.requestPermission().then(permissionState => {
+            if (permissionState === 'granted') {
+                startAccelerometer();
+            } else {
+                alert('Permission to access motion sensors denied.');
+            }
+        }).catch(console.error);
+    } else {
+        startAccelerometer();
+    }
+}
 
 // Function to start the accelerometer
 function startAccelerometer() {
