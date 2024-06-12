@@ -46,10 +46,6 @@ function initMap() {
     document.getElementById('motionPermissionButton').addEventListener('click', async () => {
         if (typeof DeviceMotionEvent.requestPermission === 'function') {
             const permissionState = await requestMotionPermission();
-            if (!permissionState) {
-                alert('Permission to access motion data denied.');
-            }
-        } else {
             startAccelerometer(); // For browsers that don't require permission
         }
     });
