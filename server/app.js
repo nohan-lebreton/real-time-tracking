@@ -225,7 +225,10 @@ function createPeerConnection(id) {
 
     peerConnection.ontrack = event => {
         console.log('Received remote stream');
-        remoteVideo.srcObject = event.streams[0];
+        if (event.streams && event.streams.length > 0) {
+            console.log('Remote stream:', event.streams[0]); // Vérifiez si le flux vidéo distant est reçu
+            remoteVideo.srcObject = event.streams[0];
+        }
     };
 
     return peerConnection;
