@@ -10,7 +10,7 @@ L'application Real-Time Tracking est une application web permettant le suivi en 
 ## Fonctionnalités
 
 - Suivi en temps réel de la position des utilisateurs. 
-- Affichage des données de l'accéléromètre.(non fonctionnel)
+- Affichage des données de l'accéléromètre.
 - Liste des utilisateurs connectés.
 - Flux vidéo en temps réel avec les autres utilisateurs. (je suis resté bloqué sur cette partie pour recuper la video de l'utilisateur disatant)
 
@@ -26,6 +26,6 @@ L'application Real-Time Tracking est une application web permettant le suivi en 
 
 1. **Ouvrez votre navigateur** et accédez à `https://nohan.lebreton.caen.mds-project.fr/`.
 
-2. **Connexion** Entrez votre nom d'utilisateur et cliquez sur le bouton "Connect" (autorisez l'accès à votre camera) afin de voir votre position sur la carte et celle des autres utilisateurs connectés.
+2. **Connexion** Entrez votre nom d'utilisateur et cliquez sur le bouton "Connect" (autorisez l'accès à votre camera et a l'accelerometre pour iphone) afin de voir votre position sur la carte et celle des autres utilisateurs connectés.
 
 3. **Visio** Sur la liste des utilisateurs connectés, cliquez sur le bouton "view camera" pour démarrer un appel vidéo avec un autre utilisateur. 

@@ -283,3 +283,10 @@ async function requestMotionPermission() {
         return true;
     }
 }
+
+peerConnection.ontrack = event => {
+    console.log('Received remote stream');
+    if (event.streams && event.streams.length > 0) {
+        remoteVideo.srcObject = event.streams[0];
+    }
+};
