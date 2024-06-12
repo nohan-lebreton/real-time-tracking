@@ -1,80 +1,285 @@
-const express = require('express');
-const http = require('http');
-const WebSocket = require('ws');
-const { v4: uuidv4 } = require('uuid');
+let map, userMarker, userId, isConnected = false;
+const markers = {};
+const socket = new WebSocket('wss://nohan.lebreton.caen.mds-project.fr');
+const localVideo = document.getElementById('localVideo');
+const remoteVideo = document.getElementById('remoteVideo');
+const accelX = document.getElementById('accelX');
+const accelY = document.getElementById('accelY');
+const accelZ = document.getElementById('accelZ');
+let localStream;
+let peerConnection;
 
-const app = express();
-const server = http.createServer(app);
-const wss = new WebSocket.Server({ server });
+function initMap() {
+    map = L.map('map').setView([51.505, -0.09], 13);
 
-app.use(express.static('public'));
+    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+        attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
+    }).addTo(map);
 
-let users = [];
+    document.getElementById('connectButton').addEventListener('click', () => {
+        const username = document.getElementById('username').value.trim();
+        if (username !== '') {
+            if (!isConnected) {
+                userId = generateId();
+                requestMotionPermission().then(granted => {
+                    if (granted) {
+                        connect(username);
+                    } else {
+                        alert('Motion access permission denied.');
+                    }
+                });
+            } else {
+                disconnect();
+            }
+        } else {
+            alert('Please enter a username.');
+        }
+    });
 
-wss.on('connection', ws => {
-    console.log('Client connected');
-    let userId = uuidv4();
-    let userData;
+    document.getElementById('username').addEventListener('keydown', event => {
+        if (event.key === 'Enter') {
+            document.getElementById('connectButton').click();
+        }
+    });
+}
 
-    ws.on('message', message => {
+async function connect(username) {
+    isConnected = true;
+    document.getElementById('connectButton').innerText = 'Disconnect';
+
+    try {
+        localStream = await navigator.mediaDevices.getUserMedia({ video: true });
+        localVideo.srcObject = localStream;
+    } catch (error) {
+        console.error('Error accessing media devices.', error);
+        alert('Error accessing media devices.');
+        return;
+    }
+
+    if (navigator.geolocation) {
+        navigator.geolocation.watchPosition(position => {
+            if (!isConnected) return; // Check if still connected
+            const { latitude, longitude } = position.coords;
+            const pos = [latitude, longitude];
+
+            if (!userMarker) {
+                userMarker = L.marker(pos).addTo(map).bindPopup(`Your Position (${username})`).openPopup();
+            } else {
+                userMarker.setLatLng(pos);
+            }
+
+            map.setView(pos);
+            socket.send(JSON.stringify({ type: 'user', id: userId, username, position: { latitude, longitude } }));
+        });
+    } else {
+        alert("Geolocation is not supported by this browser.");
+    }
+
+    // Start Accelerometer
+    startAccelerometer();
+}
+
+function disconnect() {
+    isConnected = false;
+    document.getElementById('connectButton').innerText = 'Connect';
+    if (userMarker) {
+        map.removeLayer(userMarker);
+        userMarker = null;
+    }
+    socket.send(JSON.stringify({ type: 'user', id: userId, disconnect: true }));
+    // Remove user markers from the map
+    Object.keys(markers).forEach(id => {
+        if (markers[id]) {
+            map.removeLayer(markers[id]);
+            delete markers[id];
+        }
+    });
+    // Clear the user list
+    document.getElementById('users').innerHTML = '';
+    localVideo.srcObject = null;
+    if (localStream) {
+        localStream.getTracks().forEach(track => track.stop());
+    }
+    if (peerConnection) {
+        peerConnection.close();
+        peerConnection = null;
+    }
+}
+
+socket.onmessage = event => {
+    if (!isConnected) return; // Check if still connected
+
+    const message = JSON.parse(event.data);
+    if (message.type === 'users') {
+        const users = message.data;
+        const connectedUsers = users.filter(user => !user.disconnect); // Filter connected users
+
+        // Update the map markers
+        connectedUsers.forEach(user => {
+            if (!markers[user.id]) {
+                markers[user.id] = L.marker([user.position.latitude, user.position.longitude]).addTo(map).bindPopup(`${user.username}'s Position`);
+            } else {
+                markers[user.id].setLatLng([user.position.latitude, user.position.longitude]);
+            }
+        });
+
+        // Remove markers of disconnected users
+        Object.keys(markers).forEach(id => {
+            if (!connectedUsers.find(user => user.id === id)) {
+                map.removeLayer(markers[id]);
+                delete markers[id];
+            }
+        });
+
+        // Update the user list
+        const userList = document.getElementById('users');
+        userList.innerHTML = '';
+        connectedUsers.forEach(user => {
+            const listItem = document.createElement('li');
+            listItem.textContent = `${user.username} connected at ${user.connectedAt}`;
+            const viewButton = document.createElement('button');
+            viewButton.textContent = 'View Camera';
+            viewButton.addEventListener('click', () => {
+                selectUser(user.id);
+            });
+            listItem.appendChild(viewButton);
+            userList.appendChild(listItem);
+        });
+    } else if (message.type === 'signal') {
+        handleSignal(message);
+    }
+};
+
+async function selectUser(id) {
+    console.log(`Selecting user ${id}`);
+    if (peerConnection) {
+        peerConnection.close();
+    }
+
+    peerConnection = createPeerConnection(id);
+
+    // Add local stream tracks to peer connection
+    localStream.getTracks().forEach(track => peerConnection.addTrack(track, localStream));
+
+    // Create offer and send to selected user
+    const offer = await peerConnection.createOffer();
+    await peerConnection.setLocalDescription(offer);
+
+    socket.send(JSON.stringify({
+        type: 'signal',
+        id: userId,
+        target: id,
+        offer: peerConnection.localDescription
+    }));
+}
+
+function handleSignal(message) {
+    const { id, target, offer, answer, candidate } = message;
+
+    if (target === userId) {
+        if (offer) {
+            console.log(`Received offer from ${id}`);
+            peerConnection = createPeerConnection(id);
+
+            peerConnection.setRemoteDescription(new RTCSessionDescription(offer))
+                .then(() => peerConnection.createAnswer())
+                .then(answer => peerConnection.setLocalDescription(answer))
+                .then(() => {
+                    socket.send(JSON.stringify({
+                        type: 'signal',
+                        id: userId,
+                        target: id,
+                        answer: peerConnection.localDescription
+                    }));
+                });
+        } else if (answer) {
+            console.log(`Received answer from ${id}`);
+            peerConnection.setRemoteDescription(new RTCSessionDescription(answer));
+        } else if (candidate) {
+            console.log(`Received candidate from ${id}`);
+            peerConnection.addIceCandidate(new RTCIceCandidate(candidate));
+        }
+    }
+}
+
+function createPeerConnection(id) {
+    console.log(`Creating peer connection with ${id}`);
+    const config = {
+        iceServers: [
+            { urls: 'stun:stun.l.google.com:19302' }
+        ]
+    };
+    const peerConnection = new RTCPeerConnection(config);
+
+    peerConnection.onicecandidate = event => {
+        if (event.candidate) {
+            socket.send(JSON.stringify({
+                type: 'signal',
+                id: userId,
+                target: id,
+                candidate: event.candidate
+            }));
+            console.log(`Sending candidate to ${id}`);
+        }
+    };
+
+    peerConnection.ontrack = event => {
+        console.log('Received remote stream');
+        remoteVideo.srcObject = event.streams[0];
+    };
+
+    return peerConnection;
+}
+
+function generateId() {
+    return '_' + Math.random().toString(36).substr(2, 9);
+}
+
+window.onload = initMap;
+
+// Function to start the accelerometer
+function startAccelerometer() {
+    if ('Accelerometer' in window) {
+        const accelerometer = new Accelerometer({ frequency: 60 });
+        accelerometer.addEventListener('reading', () => {
+            accelX.textContent = accelerometer.x.toFixed(2);
+            accelY.textContent = accelerometer.y.toFixed(2);
+            accelZ.textContent = accelerometer.z.toFixed(2);
+
+            if (isConnected) {
+                socket.send(JSON.stringify({
+                    type: 'accelerometer',
+                    id: userId,
+                    data: {
+                        x: accelerometer.x,
+                        y: accelerometer.y,
+                        z: accelerometer.z
+                    }
+                }));
+            }
+        });
+        accelerometer.start();
+    } else {
+        console.error('Accelerometer not supported');
+    }
+}
+
+// Function to request motion permission
+async function requestMotionPermission() {
+    if (typeof DeviceMotionEvent.requestPermission === 'function') {
         try {
-            const data = JSON.parse(message);
-            if (data.disconnect) {
-                users = users.filter(user => user.id !== data.id);
-                broadcastUsers();
-            } else if (data.type === 'user') {
-                userData = { ...data, id: userId, connectedAt: new Date().toLocaleTimeString() };
-                users = users.filter(user => user.id !== userId);
-                users.push(userData);
-                broadcastUsers();
-            } else if (data.type === 'signal') {
-                broadcastSignal(data);
-            } else if (data.type === 'accelerometer') {
-                handleAccelerometerData(data);
+            const permissionState = await DeviceMotionEvent.requestPermission();
+            if (permissionState === 'granted') {
+                return true;
+            } else {
+                return false;
             }
         } catch (error) {
-            console.error('Error processing message:', error);
+            console.error(error);
+            return false;
         }
-    });
-
-    ws.on('close', () => {
-        console.log('Client disconnected');
-        if (userData) {
-            users = users.filter(user => user.id !== userId);
-            broadcastUsers();
-        }
-    });
-
-    ws.on('error', error => {
-        console.error('WebSocket error:', error);
-    });
-});
-
-function broadcastUsers() {
-    wss.clients.forEach(client => {
-        if (client.readyState === WebSocket.OPEN) {
-            client.send(JSON.stringify({ type: 'users', data: users }));
-        }
-    });
+    } else {
+        startAccelerometer(); // For browsers that don't require permission
+        return true;
+    }
 }
-
-function broadcastSignal(signal) {
-    wss.clients.forEach(client => {
-        if (client.readyState === WebSocket.OPEN) {
-            client.send(JSON.stringify(signal));
-        }
-    });
-}
-
-function handleAccelerometerData(data) {
-    wss.clients.forEach(client => {
-        if (client.readyState === WebSocket.OPEN) {
-            client.send(JSON.stringify({ type: 'accelerometer', data }));
-        }
-    });
-}
-
-const PORT = 3000;
-server.listen(PORT, () => {
-    console.log(`Server is running on port ${PORT}`);
-});
